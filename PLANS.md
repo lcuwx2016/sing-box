@@ -117,5 +117,7 @@ sing-box 的 GPL-3.0 项目规则维护。
 
 ## 下一步优先级
 
-1. 在 CI 中定期运行生命周期测试；在具备 `XHTTP_XRAY_BINARY` 的环境继续运行
-   可选的双向互通矩阵。
+1. 已新增 `XHTTP Lifecycle` GitHub Actions workflow：相关 XHTTP 提交和 PR 会
+   自动运行生命周期 race 测试、默认 transport 测试、`with_quic` 与 `with_utls`
+   路径；每周一 02:17 UTC 也会定时运行，支持手动触发。
+2. 在具备 `XHTTP_XRAY_BINARY` 的环境继续运行可选的双向互通矩阵。
