@@ -6,7 +6,6 @@ import (
 	"context"
 	"net/netip"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -202,7 +201,7 @@ func (t *Transport) PreferredDomain(domain string) bool {
 			if linkDomain.Domain == "." {
 				continue
 			}
-			if strings.HasSuffix(domain, linkDomain.Domain) {
+			if mDNS.IsSubDomain(linkDomain.Domain, domain) {
 				return true
 			}
 		}
@@ -234,7 +233,7 @@ func (t *Transport) ExchangeAsync(ctx context.Context, message *mDNS.Msg, callba
 			if domain.Domain == "." && domain.RoutingOnly && !t.acceptDefaultResolvers {
 				continue
 			}
-			if strings.HasSuffix(question.Name, domain.Domain) {
+			if mDNS.IsSubDomain(domain.Domain, question.Name) {
 				selectedLink = link
 			}
 		}

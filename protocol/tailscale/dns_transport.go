@@ -267,7 +267,7 @@ func (t *DNSTransport) PreferredDomain(domain string) bool {
 		return true
 	}
 	for suffix := range routes {
-		if strings.HasSuffix(domain, suffix) {
+		if mDNS.IsSubDomain(suffix, domain) {
 			return true
 		}
 	}
@@ -377,7 +377,7 @@ func (t *DNSTransport) exchangeOnce(ctx context.Context, message *mDNS.Msg, allo
 		}
 	}
 	for domainSuffix, transports := range routes {
-		if strings.HasSuffix(question.Name, domainSuffix) {
+		if mDNS.IsSubDomain(domainSuffix, question.Name) {
 			if len(transports) == 0 {
 				callback(&mDNS.Msg{
 					MsgHdr: mDNS.MsgHdr{
