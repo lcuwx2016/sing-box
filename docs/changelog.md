@@ -2,6 +2,42 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0-alpha.50
+
+* Improve OpenVPN interoperability **1**
+* Improve OpenConnect interoperability **2**
+* Add Fortinet host check support **3**
+* Fixes and improvements
+
+**1**:
+
+The OpenVPN client and server now interoperate with more existing deployments
+through static-key mode, additional legacy ciphers and digests, and
+OpenVPN-compatible certificate purpose, key usage, extended key usage, and
+certificate profile checks. They also support more OpenVPN options for tunnel
+addressing, MSS calculation, replay windows, timers, and TLS renegotiation. The
+new [OpenVPN DNS server](/configuration/dns/server/openvpn/) can use both modern
+and legacy DNS options pushed by OpenVPN servers, while the sing-box server can
+push both forms.
+
+**2**:
+
+The OpenConnect client now supports existing authentication sessions, OIDC
+Bearer authentication, additional platform and AnyConnect mobile identity
+fields, AnyConnect compression, and controls for MTU, DPD and reconnect timing,
+TCP keep alive, and TLS trust and certificate pinning. The new
+[OpenConnect DNS server](/configuration/dns/server/openconnect/) can use pushed
+split-DNS resolvers and, when enabled, general pushed resolvers.
+
+**3**:
+
+The [OpenConnect Client](/configuration/endpoint/openconnect/) endpoint can now
+submit Fortinet host check results using the new
+[`fortinet_host_check`](/configuration/endpoint/openconnect/#fortinet_host_check)
+option. This behavior is modeled after openfortivpn and is not an OpenConnect
+feature. sing-box only submits explicitly configured values when requested by
+the Fortinet server and does not collect system information automatically.
+
 #### 1.14.0-alpha.48
 
 * Add SSO support for AnyConnect **1**
