@@ -56,9 +56,10 @@ jobs:
         if: matrix.os == 'linux'
         run: |
           set -xeuo pipefail
+          apk_version="0.0.0_p$((16#${GITHUB_SHA::7}))"
           .github/build_alpine_apk.sh \
             x86_64 \
-            "${{ steps.version.outputs.version }}" \
+            "$apk_version" \
             "dist/sing-box" \
             "dist/sing-box-${{ steps.version.outputs.version }}-linux-x86_64.apk"
       - name: Archive
