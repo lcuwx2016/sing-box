@@ -46,6 +46,21 @@ jobs:
           CGO_ENABLED: "0"
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
+      - name: Install apk-tools
+        if: matrix.os == 'linux'
+        run: |
+          set -xeuo pipefail
+          docker run --rm -v /usr/local/bin:/mnt alpine:edge \
+            sh -c 'apk add --no-cache apk-tools-static && cp /sbin/apk.static /mnt/apk && chmod +x /mnt/apk'
+      - name: Package Alpine APK
+        if: matrix.os == 'linux'
+        run: |
+          set -xeuo pipefail
+          .github/build_alpine_apk.sh \
+            x86_64 \
+            "${{ steps.version.outputs.version }}" \
+            "dist/sing-box" \
+            "dist/sing-box-${{ steps.version.outputs.version }}-linux-x86_64.apk"
       - name: Archive
         run: |
           set -xeuo pipefail
@@ -63,7 +78,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sing-box-${{ matrix.os }}-${{ matrix.arch }}
-          path: dist/*.${{ matrix.extension }}
+          path: dist/*
           if-no-files-found: error
           retention-days: 1
 
@@ -83,7 +98,7 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - name: Create or update prerelease
+      - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
