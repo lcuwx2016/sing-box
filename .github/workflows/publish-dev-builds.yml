@@ -77,7 +77,7 @@ jobs:
         run: |
           version=${GITHUB_SHA::7}
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=dev-$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$version" >> "$GITHUB_OUTPUT"
       - name: Download builds
         uses: actions/download-artifact@v5
         with:
@@ -86,6 +86,7 @@ jobs:
       - name: Create or update prerelease
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ steps.metadata.outputs.tag }}
           VERSION: ${{ steps.metadata.outputs.version }}
         run: |
@@ -95,7 +96,6 @@ jobs:
           else
             gh release create "$TAG" dist/* \
               --target "$GITHUB_SHA" \
-              --title "Development build $VERSION" \
-              --prerelease \
+              --title "Release $VERSION" \
               --generate-notes
           fi
