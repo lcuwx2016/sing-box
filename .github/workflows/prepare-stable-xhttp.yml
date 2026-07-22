@@ -1,0 +1,166 @@
+name: Prepare Stable XHTTP
+
+on:
+  workflow_run:
+    workflows:
+      - Sync Official Stable
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prepare-stable-xhttp
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Prepare integration branch and pull request
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require workflow-enabled token
+        env:
+          SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          if [[ -z "$SYNC_TOKEN" ]]; then
+            echo "SYNC_TOKEN must be a token with Contents and Workflows write access." >&2
+            exit 1
+          fi
+
+      - name: Checkout main
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN }}
+
+      - name: Resolve latest official stable release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag=$(gh api repos/SagerNet/sing-box/releases/latest --jq .tag_name)
+          if [[ "$tag" == *-* ]]; then
+            echo "The latest GitHub Release is not a formal release: $tag" >&2
+            exit 1
+          fi
+
+          minimum=v1.14.0
+          eligible=false
+          if [[ "$(printf '%s\n%s\n' "$minimum" "$tag" | sort -V | head -n 1)" == "$minimum" ]]; then
+            eligible=true
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
+
+          if [[ "$eligible" != true ]]; then
+            echo "### Stable XHTTP preparation skipped" >> "$GITHUB_STEP_SUMMARY"
+            echo "Latest formal release **$tag** is older than **$minimum**." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Fetch official tag and XHTTP archive
+        id: sources
+        if: steps.release.outputs.eligible == 'true'
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git remote add official https://github.com/SagerNet/sing-box.git
+          git fetch --no-tags official "+refs/tags/$TAG:refs/official-tags/$TAG"
+          git fetch --no-tags origin "+refs/heads/archive/flyzstu-xhttp:refs/remotes/origin/archive/flyzstu-xhttp"
+          official_commit=$(git rev-parse "refs/official-tags/$TAG^{}")
+          echo "official_commit=$official_commit" >> "$GITHUB_OUTPUT"
+
+      - name: Apply XHTTP-only commits
+        id: integrate
+        if: steps.release.outputs.eligible == 'true'
+        env:
+          OFFICIAL_COMMIT: ${{ steps.sources.outputs.official_commit }}
+        run: |
+          set -euo pipefail
+          xhttp_ref=refs/remotes/origin/archive/flyzstu-xhttp
+          branch=integration/stable-xhttp
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git switch --detach "$OFFICIAL_COMMIT"
+          git switch -C "$branch"
+
+          commits=(
+            60c06ecbe8912f1400d4ec64743bff92ec71a2c5
+            b3190f1c50b9ef23b011b9dbf41648d5b40e65dd
+            2c08ed8f15474abe0375ff28adfbf11493b8845d
+            6cbdde317318d04900c7112392e994512edc872d
+          )
+
+          for commit in "${commits[@]}"; do
+            status=$(git cherry "$OFFICIAL_COMMIT" "$xhttp_ref" | awk -v commit="$commit" '$2 == commit { print $1 }')
+            if [[ "$status" == "-" ]]; then
+              echo "Skipping patch already included upstream: $commit"
+              continue
+            fi
+            if ! git cherry-pick "$commit"; then
+              conflicts=$(git diff --name-only --diff-filter=U || true)
+              git cherry-pick --abort
+              {
+                echo "### XHTTP integration needs manual conflict resolution"
+                echo '```'
+                echo "$conflicts"
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+
+            case "$commit" in
+              60c06ecbe8912f1400d4ec64743bff92ec71a2c5)
+                git restore --source=HEAD^ --staged --worktree -- .github/workflows/package-image.yml PLANS.md
+                git commit --amend --no-edit
+                ;;
+              2c08ed8f15474abe0375ff28adfbf11493b8845d|6cbdde317318d04900c7112392e994512edc872d)
+                git restore --source=HEAD^ --staged --worktree -- PLANS.md
+                git commit --amend --no-edit
+                ;;
+            esac
+          done
+
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Push integration branch
+        if: steps.release.outputs.eligible == 'true'
+        env:
+          BRANCH: ${{ steps.integrate.outputs.branch }}
+        run: |
+          set -euo pipefail
+          remote_sha=$(git ls-remote --heads origin "refs/heads/$BRANCH" | cut -f1)
+          if [[ -n "$remote_sha" ]]; then
+            git push origin "HEAD:refs/heads/$BRANCH" --force-with-lease="refs/heads/$BRANCH:$remote_sha"
+          else
+            git push origin "HEAD:refs/heads/$BRANCH"
+          fi
+
+      - name: Create or update pull request
+        if: steps.release.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+          BRANCH: ${{ steps.integrate.outputs.branch }}
+        run: |
+          set -euo pipefail
+          number=$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          title="Integrate XHTTP with $TAG"
+          body=$(printf 'Rebuilds the maintained XHTTP patch set on official `%s`.\n\nThis PR requires build validation and manual review; it is not merged or released automatically.' "$TAG")
+          if [[ -n "$number" ]]; then
+            gh pr edit "$number" --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+            url=$(gh pr view "$number" --repo "$GITHUB_REPOSITORY" --json url --jq .url)
+          else
+            url=$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH" --title "$title" --body "$body")
+          fi
+          {
+            echo "### Stable XHTTP integration prepared"
+            echo "- Official release: **$TAG**"
+            echo "- Pull request: $url"
+          } >> "$GITHUB_STEP_SUMMARY"
