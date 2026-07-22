@@ -1,6 +1,7 @@
 name: Publish Development Builds
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - dev-next
