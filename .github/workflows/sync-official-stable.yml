@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: sync-official-stable
@@ -17,15 +17,25 @@ jobs:
     name: Sync latest official stable release
     runs-on: ubuntu-latest
     steps:
+      - name: Require sync token
+        env:
+          SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          if [[ -z "$SYNC_TOKEN" ]]; then
+            echo "Missing SYNC_TOKEN repository secret with Contents and Workflows write permissions." >&2
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN }}
 
       - name: Resolve latest official stable release
         id: release
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.SYNC_TOKEN }}
         run: |
           set -euo pipefail
           tag=$(gh api repos/SagerNet/sing-box/releases/latest --jq '.tag_name')
