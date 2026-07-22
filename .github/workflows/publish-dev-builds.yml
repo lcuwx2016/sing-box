@@ -2,6 +2,11 @@ name: Publish Development Builds
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: Version used for branch builds (tag builds use the tag name)
+        required: false
+        type: string
   pull_request:
     branches:
       - main
@@ -42,7 +47,16 @@ jobs:
           local-cache: true
       - name: Set version
         id: version
-        run: echo "version=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          version="$INPUT_VERSION"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            version="$GITHUB_REF_NAME"
+          elif [[ -z "$version" ]]; then
+            version="${GITHUB_SHA::7}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Build
         if: matrix.os != 'android'
         run: |
@@ -111,7 +125,7 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -119,8 +133,15 @@ jobs:
     steps:
       - name: Set release metadata
         id: metadata
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          version=${GITHUB_SHA::7}
+          version="$INPUT_VERSION"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            version="$GITHUB_REF_NAME"
+          elif [[ -z "$version" ]]; then
+            version="${GITHUB_SHA::7}"
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$version" >> "$GITHUB_OUTPUT"
       - name: Download builds
@@ -139,7 +160,11 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
           else
-            gh release create "$TAG" dist/* \
+            prerelease=()
+            if [[ "$TAG" =~ (alpha|beta|rc) ]]; then
+              prerelease=(--prerelease)
+            fi
+            gh release create "$TAG" dist/* "${prerelease[@]}" \
               --target "$GITHUB_SHA" \
               --title "Release $VERSION" \
               --generate-notes
