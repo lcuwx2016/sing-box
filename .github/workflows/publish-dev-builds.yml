@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - dev-next
+      - main
 
 permissions:
   contents: write
@@ -111,7 +111,7 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    if: github.ref == 'refs/heads/dev-next'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs: build
     steps:
