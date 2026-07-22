@@ -8,6 +8,10 @@ The universal proxy platform.
 
 https://sing-box.sagernet.org
 
+## Fork maintenance
+
+This fork tracks the official `SagerNet/sing-box` `testing` branch and preserves selected XHTTP changes from `flyzstu/sing-box`. See [FORK.md](FORK.md) for the branch and release policy.
+
 ## License
 
 ```
