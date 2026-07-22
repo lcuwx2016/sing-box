@@ -22,6 +22,8 @@ jobs:
         include:
           - { os: linux, arch: amd64, extension: tar.gz }
           - { os: windows, arch: amd64, extension: zip }
+          - { os: android, arch: arm64, extension: tar.gz, ndk: aarch64-linux-android23 }
+          - { os: android, arch: arm, extension: tar.gz, ndk: armv7a-linux-androideabi23 }
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
@@ -31,10 +33,17 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ~1.25.11
+      - name: Setup Android NDK
+        if: matrix.os == 'android'
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r28
+          local-cache: true
       - name: Set version
         id: version
         run: echo "version=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
       - name: Build
+        if: matrix.os != 'android'
         run: |
           set -xeuo pipefail
           mkdir -p dist
@@ -46,6 +55,22 @@ jobs:
           CGO_ENABLED: "0"
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
+      - name: Build Android
+        if: matrix.os == 'android'
+        run: |
+          set -xeuo pipefail
+          go install -v ./cmd/internal/build
+          export CC='${{ matrix.ndk }}-clang'
+          export CXX="${CC}++"
+          mkdir -p dist
+          GOOS="$BUILD_GOOS" GOARCH="$BUILD_GOARCH" build go build -v -trimpath -o dist/sing-box \
+            -tags "$(cat release/DEFAULT_BUILD_TAGS_OTHERS)" \
+            -ldflags "-X 'github.com/sagernet/sing-box/constant.Version=${{ steps.version.outputs.version }}' $(cat release/LDFLAGS) -s -w -buildid=" \
+            ./cmd/sing-box
+        env:
+          CGO_ENABLED: "1"
+          BUILD_GOOS: ${{ matrix.os }}
+          BUILD_GOARCH: ${{ matrix.arch }}
       - name: Install apk-tools
         if: matrix.os == 'linux'
         run: |
